@@ -1,0 +1,9 @@
+[package]
+name = "mquote"
+version = "0.1.0"
+authors = ["Denis <denis.varlakov@vdomresearch.com>"]
+edition = "2018"
+
+[dependencies]
+proc-macro-hack = "0.5"
+mquote-impl = { path = "./impl" }
