@@ -7,3 +7,6 @@ edition = "2018"
 [dependencies]
 proc-macro-hack = "0.5"
 mquote-impl = { path = "./impl" }
+
+[dev-dependencies]
+quote = "0.2"

@@ -7,12 +7,17 @@ use proc_macro::TokenStream;
 use proc_macro_hack::proc_macro_hack;
 use proc_quote::quote;
 
-mod intermediate;
-mod convert;
+use crate::language::*;
+
+mod language;
+mod compile;
 
 #[proc_macro_hack]
 pub fn mquote(input: TokenStream) -> TokenStream {
-    TokenStream::from(quote! {
-        1 + 2
-    })
+    let a = 4;
+    let mquote = MQuote::Binding(MQuoteBinding {
+        start: quote!(1 + ),
+        parts: vec![(BindWith::Expression(input.into()), quote!(+ 3))],
+    });
+    compile::compile(mquote).into()
 }

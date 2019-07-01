@@ -1,11 +1,12 @@
-use proc_macro::TokenStream;
+use proc_macro2::TokenStream;
 
 pub enum MQuote {
     Binding(MQuoteBinding),
 }
 
 pub struct MQuoteBinding {
-    parts: Vec<(TokenStream, BindWith)>,
+    pub start: TokenStream,
+    pub parts: Vec<(BindWith, TokenStream)>,
 }
 
 pub enum BindWith {
