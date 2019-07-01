@@ -17,7 +17,11 @@ pub fn mquote(input: TokenStream) -> TokenStream {
     let a = 4;
     let mquote = MQuote::Binding(MQuoteBinding {
         start: quote!(1 + ),
-        parts: vec![(BindWith::Expression(input.into()), quote!(+ 3))],
+        cons: vec![(BindWith::MQuote(Box::new(MQuote::If(MQuoteIf {
+            condition: input.into(),
+            then: Box::new(MQuote::Binding(MQuoteBinding { start: quote!( 2 ), cons: vec![] })),
+            else_: Some(Box::new(MQuote::Binding(MQuoteBinding { start: quote!( 3 ), cons: vec![] }))),
+        }))), quote!(+ 3))],
     });
     compile::compile(mquote).into()
 }
