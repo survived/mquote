@@ -14,14 +14,25 @@ mod compile;
 
 #[proc_macro_hack]
 pub fn mquote(input: TokenStream) -> TokenStream {
-    let a = 4;
-    let mquote = MQuote::Binding(MQuoteBinding {
-        start: quote!(1 + ),
-        cons: vec![(BindWith::MQuote(Box::new(MQuote::If(MQuoteIf {
-            condition: input.into(),
-            then: Box::new(MQuote::Binding(MQuoteBinding { start: quote!( 2 ), cons: vec![] })),
-            else_: Some(Box::new(MQuote::Binding(MQuoteBinding { start: quote!( 3 ), cons: vec![] }))),
-        }))), quote!(+ 3))],
-    });
-    compile::compile(mquote).into()
+    use std::iter;
+    use proc_macro2::*;
+    let mut input = proc_macro2::TokenStream::from(input).into_iter();
+    let a = input.next().unwrap();
+    let b = input.next().unwrap();
+    let stream: Vec<TokenTreeQ> = vec![
+        TokenTreeQ::Plain(Literal::i32_suffixed(1).into()),
+        TokenTreeQ::Plain(Punct::new('+', Spacing::Alone).into()),
+        TokenTreeQ::If(MQuoteIf {
+            condition: quote!(#a),
+            then: TokenStreamQ::from(vec![
+                TokenTreeQ::Insertion(MQuoteInsertion::Unescaped(iter::once(b).collect())),
+            ]),
+            else_: Some(TokenStreamQ::from(vec![
+                TokenTreeQ::Plain(Literal::i32_suffixed(2).into()),
+            ])),
+        }),
+        TokenTreeQ::Plain(Punct::new('+', Spacing::Alone).into()),
+        TokenTreeQ::Plain(Literal::i32_suffixed(3).into()),
+    ];
+    compile::compile(TokenStreamQ::from(stream)).into()
 }
