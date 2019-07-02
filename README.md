@@ -1,3 +1,9 @@
+# TODO
+* quote or proc_quote
+* parsing
+* for, match
+* examples
+
 # Motivation
 The only interpolations supported by `quote!` macros are regular insertion `#a` (and
 you are not able to put an expression like `my_struct.field` here) and repeating 
@@ -29,7 +35,8 @@ It supports:
 - [ ] **match**ing 
 
 The crate does not reimplement the same things as already done in `quote` and
-`proc_quote`, it provides another syntax for them instead.
+`proc_quote`, it provides another syntax for them instead. That means `mquote!`
+expands into `quote!` calling. 
 
 # Examples
 
