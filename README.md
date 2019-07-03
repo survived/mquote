@@ -1,5 +1,6 @@
 # TODO
 * remove dependency on quote and proc_macro2 from consumer
+* escaping
 * parsing
 * for, match
 * examples
@@ -7,14 +8,14 @@
 # Motivation
 The only interpolations supported by `quote!` macros are regular insertion `#a` (and
 you are not able to put an expression like `my_struct.field` here) and repeating 
-insertion (`#(...)*`).
+insertion `#(...)*`.
 
 For me that's not enough. If you wanna conditionally put a piece of tokens, you
 have to associate them with some variable and then interpolate it into `quote!`
 expression:
 ```rust
 let conditional_piece = if having_fun { 
-    quote!(fn funny_method() -> i32 { 42 }) 
+    quote!(fn funny_method() { ... }) 
 } else { 
     quote!() 
 };
@@ -29,10 +30,10 @@ Even putting simple expression like `my_struct.field` must be handled in this wa
 
 # Introduce templating `mquote!`
 It supports:
-- [x] Expression insertion
-- [x] **if/else** condition
-- [ ] **for** iteration
-- [ ] **match**ing 
+- [x] [Expression insertion](#expression-insertion)
+- [x] [**if/else**](#if--elif--else) condition
+- [ ] [**for**](#for) iteration
+- [ ] [**match**](#matching)ing 
 
 This crate is not about syntax sugar only! In fact using `mquote!` in complicated
 cases gives a bit of performance increasing since it does not create a several
@@ -43,7 +44,7 @@ So you're able to rewrite above code:
 ```rust
 mquote!{
     #{if having_fun}
-        fn funny_method() -> i32 { 42 }
+        fn funny_method() { ... }
     #{endif}
     fn regular_method() { ... }
 }
@@ -51,16 +52,56 @@ mquote!{
 
 # More examples
 
+## Expression insertion
+
 ```rust
-// TODO: incorrect example
-fn for_usage(){
-    let fields = vec![("name", false, "String"), ("age", true, "u8")];
+fn put_filter(enabled: bool) -> TokenStream {
+    let good_person = Person{ name: "Oleg", age: 20 };
+    mquote!{
+        assert!(!#{enabled} || person.name == #{good_person.name} 
+            && person.age >= #{good_person.age})
+    } 
+}
+```
+
+## if / elif / else
+```rust
+fn define_container(amount: usize) -> TokenStream {
+    mquote!{
+        #{if amount > 1}
+            struct People(Vec<Person>);
+        #{elif amount == 1}
+            struct Human(Person);
+        #{else}
+            struct NoneHuman;
+        #{endif}
+    }
+}
+```
+
+## for
+```rust
+fn for_usage(fields: Vec<(Ident, Ident)>){
     mquote!{
         pub struct Person {
-            #{for field in fields}
-                #{field.0}: #{field.1}
+            #{for (name, ty) in fields}
+                #{name}: #{ty}
             #{endfor}
         }
     }
+}
+```
+
+## matching
+```rust
+// TODO
+```
+
+## Escaping `#{}`
+If you wanna put `#{abc}` as is, you should double braces:
+```rust
+fn it_works() {
+    let tokens = mquote!(#{{abc}});
+    assert_eq!(tokens.to_string(), "#{abc}")
 }
 ```
