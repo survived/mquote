@@ -39,7 +39,17 @@ cases gives a bit of performance increasing since it does not create a several
 `TokenStream`s and join them together, it handles everything within single 
 `TokenStream`.
 
-# Examples
+So you're able to rewrite above code:
+```rust
+mquote!{
+    #{if having_fun}
+        fn funny_method() -> i32 { 42 }
+    #{endif}
+    fn regular_method() { ... }
+}
+```
+
+# More examples
 
 ```rust
 // TODO: incorrect example
