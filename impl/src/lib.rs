@@ -25,7 +25,7 @@ pub fn mquote(input: TokenStream) -> TokenStream {
         TokenTreeQ::If(MQuoteIf {
             condition: quote!(#a),
             then: TokenStreamQ::from(vec![
-                TokenTreeQ::Insertion(MQuoteInsertion::Unescaped(iter::once(b).collect())),
+                TokenTreeQ::Insertion(iter::once(b).collect()),
             ]),
             else_: Some(TokenStreamQ::from(vec![
                 TokenTreeQ::Plain(Literal::i32_suffixed(2).into()),

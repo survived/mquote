@@ -31,7 +31,7 @@ impl From<Vec<TokenTreeQ>> for TokenStreamQ {
 }
 
 pub enum TokenTreeQ {
-    Insertion(MQuoteInsertion),
+    Insertion(TokenStream),
     If(MQuoteIf),
     Group(MQuoteGroup),
     Plain(TokenTree),
@@ -41,11 +41,6 @@ pub struct MQuoteGroup {
     pub delimiter: Delimiter,
     pub stream: TokenStreamQ,
     pub span: Span,
-}
-
-pub enum MQuoteInsertion {
-    Escaped(TokenStream),
-    Unescaped(TokenStream),
 }
 
 pub struct MQuoteIf {

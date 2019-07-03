@@ -9,4 +9,5 @@ proc-macro-hack = "0.5"
 mquote-impl = { path = "./impl" }
 
 [dev-dependencies]
-quote = "0.2"
+quote = "0.6"
+proc-macro2 = "0.4"

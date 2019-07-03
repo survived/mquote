@@ -1,5 +1,5 @@
 # TODO
-* quote or proc_quote
+* remove dependency on quote and proc_macro2 from consumer
 * parsing
 * for, match
 * examples
@@ -27,16 +27,17 @@ quote!(
 Don't you find it could be confusing? Especially if there're a lot of such things.
 Even putting simple expression like `my_struct.field` must be handled in this way.
 
-# Introduce Templating `quote!`
+# Introduce templating `mquote!`
 It supports:
 - [x] Expression insertion
 - [x] **if/else** condition
 - [ ] **for** iteration
 - [ ] **match**ing 
 
-The crate does not reimplement the same things as already done in `quote` and
-`proc_quote`, it provides another syntax for them instead. That means `mquote!`
-expands into `quote!` calling. 
+This crate is not about syntax sugar only! In fact using `mquote!` in complicated
+cases gives a bit of performance increasing since it does not create a several
+`TokenStream`s and join them together, it handles everything within single 
+`TokenStream`.
 
 # Examples
 
