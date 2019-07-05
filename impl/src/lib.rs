@@ -9,6 +9,7 @@ use proc_quote::quote;
 
 use crate::language::*;
 
+mod parse;
 mod language;
 mod compile;
 
