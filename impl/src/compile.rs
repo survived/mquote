@@ -3,8 +3,9 @@ use proc_macro2::*;
 use proc_quote::{TokenStreamExt, quote, quote_spanned};
 
 use crate::language::*;
+use crate::buffer::QTokens;
 
-pub fn compile(mquote: TokenStreamQ) -> TokenStream {
+pub fn compile(mquote: QTokens) -> TokenStream {
     let mut stream = TokenStream::new();
     let ref token_stream = Ident::new("__token_stream", Span::call_site());
     compile_with(mquote, &mut stream, token_stream);
@@ -32,9 +33,9 @@ fn process_token(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ide
                 ::quote::ToTokens::to_tokens(__insertation, &mut #token_stream);
             }));
         },
-        TokenTreeQ::Group(MQuoteGroup{ delimiter, stream: group_stream, span }) => {
+        TokenTreeQ::Group(MQuoteGroup{ delimiter, tokens: group_tokens, span }) => {
             let mut inner_stream = TokenStream::new();
-            compile_with(group_stream, &mut inner_stream, token_stream);
+            compile_with(group_tokens, &mut inner_stream, token_stream);
 
             let mut group = proc_macro2::Group::new(delimiter, inner_stream);
             group.set_span(span);

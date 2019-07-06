@@ -8,8 +8,10 @@ use proc_macro_hack::proc_macro_hack;
 use proc_quote::quote;
 
 use crate::language::*;
+use crate::buffer::QTokens;
 
-mod parse;
+mod buffer;
+//mod parse;
 mod language;
 mod compile;
 
@@ -25,15 +27,15 @@ pub fn mquote(input: TokenStream) -> TokenStream {
         TokenTreeQ::Plain(Punct::new('+', Spacing::Alone).into()),
         TokenTreeQ::If(MQuoteIf {
             condition: quote!(#a),
-            then: TokenStreamQ::from(vec![
+            then: QTokens::from(vec![
                 TokenTreeQ::Insertion(iter::once(b).collect()),
             ]),
-            else_: Some(TokenStreamQ::from(vec![
+            else_: Some(QTokens::from(vec![
                 TokenTreeQ::Plain(Literal::i32_suffixed(2).into()),
             ])),
         }),
         TokenTreeQ::Plain(Punct::new('+', Spacing::Alone).into()),
         TokenTreeQ::Plain(Literal::i32_suffixed(3).into()),
     ];
-    compile::compile(TokenStreamQ::from(stream)).into()
+    compile::compile(QTokens::from(stream)).into()
 }
