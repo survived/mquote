@@ -11,7 +11,8 @@ use crate::language::*;
 use crate::buffer::QTokens;
 
 mod buffer;
-//mod parse;
+mod error;
+mod parse;
 mod language;
 mod compile;
 

@@ -9,6 +9,9 @@ pub struct QTokens {
 }
 
 impl QTokens {
+    pub fn new() -> Self {
+        Self { tokens: vec![] }
+    }
     pub fn push(&mut self, token: TokenTreeQ) {
         self.tokens.push(token);
     }
