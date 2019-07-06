@@ -4,33 +4,46 @@ use proc_quote::{TokenStreamExt, quote, quote_spanned};
 use crate::language::*;
 use crate::buffer::QTokens;
 
+struct Scope {
+    token_stream_var: Ident,
+    requested_span: TokenStream,
+    runtime: TokenStream,
+}
+
 pub fn compile(mquote: QTokens) -> TokenStream {
+    let runtime = quote!(::mquote::__rt);
+    let scope = Scope {
+        token_stream_var: Ident::new("__token_stream", Span::call_site()),
+        requested_span: quote!(#runtime::proc_macro2::Span::call_site()),
+        runtime: runtime.clone(),
+    };
     let mut stream = TokenStream::new();
-    let ref token_stream = Ident::new("__token_stream", Span::call_site());
-    compile_with(mquote, &mut stream, token_stream);
+    compile_with(mquote, &mut stream, &scope);
+
+    let ref token_stream_var = scope.token_stream_var;
     quote!{{
-        let mut #token_stream = ::proc_macro2::TokenStream::new();
+        let mut #token_stream_var = #runtime::proc_macro2::TokenStream::new();
         #stream
-        #token_stream
+        #token_stream_var
     }}
 }
 
-fn compile_with<S>(mquote: S, stream: &mut TokenStream, token_stream: &Ident)
+fn compile_with<S>(mquote: S, stream: &mut TokenStream, scope: &Scope)
 where S: IntoIterator<Item=TokenTreeQ>
 {
     mquote.into_iter()
-        .for_each(|token| put_qtoken(token, stream, token_stream))
+        .for_each(|token| put_qtoken(token, stream, scope))
 }
 
-fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ident) {
-    let requested_span = quote!(::proc_macro2::Span::call_site());
+fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
+    let Scope{ ref runtime, ref requested_span, ref token_stream_var} = scope;
     match token {
-        TokenTreeQ::Plain(token) => put_token(token, stream, token_stream),
+        TokenTreeQ::Plain(token) => put_token(token, stream, scope),
         TokenTreeQ::Insertion(tokens) => {
-            assert_ne!(token_stream.to_string(), "__insertion");
+            assert_ne!(token_stream_var.to_string(), "__insertion");
             stream.append_all(quote!({
                 let ref __insertation = #tokens;
-                ::quote::ToTokens::to_tokens(__insertation, &mut #token_stream);
+                #runtime::quote::ToTokens::to_tokens(__insertation, &mut #token_stream_var);
             }));
         },
         TokenTreeQ::Group(MQuoteGroup{ delimiter, tokens: group_tokens, span }) => {
@@ -41,30 +54,37 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ident)
                 Delimiter::None        => Ident::new("None"       , span),
             };
 
-            let inner_stream_var = Ident::new("inner_stream", span);
+            let inner_scope = Scope {
+                token_stream_var: Ident::new("inner_stream", span),
+                requested_span: requested_span.clone(),
+                runtime: runtime.clone(),
+            };
+            let ref inner_stream_var = inner_scope.token_stream_var;
             let constructing_group_var = Ident::new("constructing_group", span);
 
             let mut inner_stream = TokenStream::new();
             inner_stream.append_all(quote_spanned!(span =>
-                let mut #inner_stream_var = ::proc_macro2::TokenStream::new();
+                let mut #inner_stream_var = #runtime::proc_macro2::TokenStream::new();
             ));
-            compile_with(group_tokens, &mut inner_stream, &inner_stream_var);
+
+            compile_with(group_tokens, &mut inner_stream, &inner_scope);
+
             inner_stream.append_all(quote_spanned!(span =>
-                let mut #constructing_group_var = ::proc_macro2::Group::new(::proc_macro2::Delimiter::#delimiter, #inner_stream_var);
+                let mut #constructing_group_var = #runtime::proc_macro2::Group::new(#runtime::proc_macro2::Delimiter::#delimiter, #inner_stream_var);
                 #constructing_group_var.set_span(#requested_span);
-                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Group(#constructing_group_var)))
+                #token_stream_var.extend(::std::iter::once(#runtime::proc_macro2::TokenTree::Group(#constructing_group_var)))
             ));
 
             stream.append_all(quote_spanned!(span => { #inner_stream }));
         }
         TokenTreeQ::If(MQuoteIf{ condition, then, else_}) => {
             let mut then_stream = TokenStream::new();
-            compile_with(then, &mut then_stream, token_stream);
+            compile_with(then, &mut then_stream, scope);
             let then_branch = Group::new(Delimiter::Brace, then_stream);
 
             let mut else_stream = TokenStream::new();
             if let Some(else_) = else_ {
-                compile_with(else_, &mut else_stream, token_stream);
+                compile_with(else_, &mut else_stream, scope);
             }
             let else_branch = Group::new(Delimiter::Brace, else_stream);
 
@@ -73,16 +93,16 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ident)
     }
 }
 
-fn put_token(token: TokenTree, stream: &mut TokenStream, token_stream: &Ident) {
-    let requested_span = quote!(::proc_macro2::Span::call_site());
+fn put_token(token: TokenTree, stream: &mut TokenStream, scope: &Scope) {
+    let Scope{ ref runtime, ref requested_span, ref token_stream_var} = scope;
     match token {
         TokenTree::Literal(lit) => {
             let span = lit.span();
             let stringed_lit = lit.to_string();
 
             stream.append_all(quote_spanned!(span => {
-                let s: ::proc_macro2::TokenStream = #stringed_lit.parse().expect("invalid token stream");
-                #token_stream.extend(s.into_iter().map(|mut t| {
+                let s: #runtime::proc_macro2::TokenStream = #stringed_lit.parse().expect("invalid token stream");
+                #token_stream_var.extend(s.into_iter().map(|mut t| {
                     t.set_span(#requested_span);
                     t
                 }))
@@ -96,17 +116,17 @@ fn put_token(token: TokenTree, stream: &mut TokenStream, token_stream: &Ident) {
                 Spacing::Joint => Ident::new("Joint", span),
             };
             stream.append_all(quote_spanned!(span => {
-                let mut p = ::proc_macro2::Punct::new(#op, ::proc_macro2::Spacing::#spacing);
+                let mut p = #runtime::proc_macro2::Punct::new(#op, #runtime::proc_macro2::Spacing::#spacing);
                 p.set_span(#requested_span);
-                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Punct(p)));
+                #token_stream_var.extend(::std::iter::once(#runtime::proc_macro2::TokenTree::Punct(p)));
             }));
         }
         TokenTree::Ident(ident) => {
             let stringed_ident = ident.to_string();
             let span = ident.span();
             stream.append_all(quote_spanned!(span => {
-                let i = ::proc_macro2::Ident::new(#stringed_ident, #requested_span);
-                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Ident(i)));
+                let i = #runtime::proc_macro2::Ident::new(#stringed_ident, #requested_span);
+                #token_stream_var.extend(::std::iter::once(#runtime::proc_macro2::TokenTree::Ident(i)));
             }));
         }
         TokenTree::Group(group) => {
@@ -115,7 +135,7 @@ fn put_token(token: TokenTree, stream: &mut TokenStream, token_stream: &Ident) {
                 delimiter: group.delimiter(),
                 tokens: group.stream().into_iter().map(TokenTreeQ::Plain).collect(),
             };
-            put_qtoken(TokenTreeQ::Group(qtoken), stream, token_stream)
+            put_qtoken(TokenTreeQ::Group(qtoken), stream, scope)
         }
     }
 }

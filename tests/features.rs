@@ -1,6 +1,3 @@
-extern crate quote;
-extern crate proc_macro2;
-
 use mquote::mquote;
 
 #[test]
