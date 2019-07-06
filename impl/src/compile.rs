@@ -1,10 +1,10 @@
-use std::iter;
 use proc_macro2::*;
 use proc_quote::{TokenStreamExt, quote, quote_spanned};
 
 use crate::language::*;
+use crate::buffer::QTokens;
 
-pub fn compile(mquote: TokenStreamQ) -> TokenStream {
+pub fn compile(mquote: QTokens) -> TokenStream {
     let mut stream = TokenStream::new();
     let ref token_stream = Ident::new("__token_stream", Span::call_site());
     compile_with(mquote, &mut stream, token_stream);
@@ -19,10 +19,11 @@ fn compile_with<S>(mquote: S, stream: &mut TokenStream, token_stream: &Ident)
 where S: IntoIterator<Item=TokenTreeQ>
 {
     mquote.into_iter()
-        .for_each(|token| process_token(token, stream, token_stream))
+        .for_each(|token| put_qtoken(token, stream, token_stream))
 }
 
-fn process_token(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ident) {
+fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ident) {
+    let requested_span = quote!(::proc_macro2::Span::call_site());
     match token {
         TokenTreeQ::Plain(token) => put_token(token, stream, token_stream),
         TokenTreeQ::Insertion(tokens) => {
@@ -32,14 +33,29 @@ fn process_token(token: TokenTreeQ, stream: &mut TokenStream, token_stream: &Ide
                 ::quote::ToTokens::to_tokens(__insertation, &mut #token_stream);
             }));
         },
-        TokenTreeQ::Group(MQuoteGroup{ delimiter, stream: group_stream, span }) => {
+        TokenTreeQ::Group(MQuoteGroup{ delimiter, tokens: group_tokens, span }) => {
+            let delimiter = match delimiter {
+                Delimiter::Brace       => Ident::new("Brace"      , span),
+                Delimiter::Bracket     => Ident::new("Bracket"    , span),
+                Delimiter::Parenthesis => Ident::new("Parenthesis", span),
+                Delimiter::None        => Ident::new("None"       , span),
+            };
+
+            let inner_stream_var = Ident::new("inner_stream", span);
+            let constructing_group_var = Ident::new("constructing_group", span);
+
             let mut inner_stream = TokenStream::new();
-            compile_with(group_stream, &mut inner_stream, token_stream);
+            inner_stream.append_all(quote_spanned!(span =>
+                let mut #inner_stream_var = ::proc_macro2::TokenStream::new();
+            ));
+            compile_with(group_tokens, &mut inner_stream, &inner_stream_var);
+            inner_stream.append_all(quote_spanned!(span =>
+                let mut #constructing_group_var = ::proc_macro2::Group::new(::proc_macro2::Delimiter::#delimiter, #inner_stream_var);
+                #constructing_group_var.set_span(#requested_span);
+                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Group(#constructing_group_var)))
+            ));
 
-            let mut group = proc_macro2::Group::new(delimiter, inner_stream);
-            group.set_span(span);
-
-            put_token(group.into(), stream, token_stream);
+            stream.append_all(quote_spanned!(span => { #inner_stream }));
         }
         TokenTreeQ::If(MQuoteIf{ condition, then, else_}) => {
             let mut then_stream = TokenStream::new();
@@ -90,30 +106,16 @@ fn put_token(token: TokenTree, stream: &mut TokenStream, token_stream: &Ident) {
             let span = ident.span();
             stream.append_all(quote_spanned!(span => {
                 let i = ::proc_macro2::Ident::new(#stringed_ident, #requested_span);
-                #token_stream.extend(::std::iter::once(i));
+                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Ident(i)));
             }));
         }
         TokenTree::Group(group) => {
-            let span = group.span();
-            let delimiter = match group.delimiter() {
-                Delimiter::Brace       => Ident::new("Brace"      , span),
-                Delimiter::Bracket     => Ident::new("Bracket"    , span),
-                Delimiter::Parenthesis => Ident::new("Parenthesis", span),
-                Delimiter::None        => Ident::new("None"       , span),
+            let qtoken = MQuoteGroup {
+                span: group.span(),
+                delimiter: group.delimiter(),
+                tokens: group.stream().into_iter().map(TokenTreeQ::Plain).collect(),
             };
-
-            let inner_stream_var = Ident::new("inner_stream", span);
-            let mut inner_stream = TokenStream::new();
-            inner_stream.append_all(quote_spanned!(span =>
-                let mut ref #inner_stream_var = ::proc_macro2::TokenStream::new();
-            ));
-            compile_with(group.stream().into_iter().map(TokenTreeQ::Plain), &mut inner_stream, &inner_stream_var);
-            inner_stream.append_all(quote_spanned!(span =>
-                ::proc_macro2::Group::new(::proc_macro2::Delimiter::#delimiter, #requested_span)
-            ));
-
-            stream.append_all(quote_spanned!(span => { #inner_stream }));
-
+            put_qtoken(TokenTreeQ::Group(qtoken), stream, token_stream)
         }
     }
 }
