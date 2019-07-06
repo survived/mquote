@@ -1,4 +1,3 @@
-use std::iter;
 use proc_macro2::*;
 use proc_quote::{TokenStreamExt, quote, quote_spanned};
 
@@ -91,7 +90,7 @@ fn put_token(token: TokenTree, stream: &mut TokenStream, token_stream: &Ident) {
             let span = ident.span();
             stream.append_all(quote_spanned!(span => {
                 let i = ::proc_macro2::Ident::new(#stringed_ident, #requested_span);
-                #token_stream.extend(::std::iter::once(i));
+                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Ident(i)));
             }));
         }
         TokenTree::Group(group) => {
@@ -104,13 +103,17 @@ fn put_token(token: TokenTree, stream: &mut TokenStream, token_stream: &Ident) {
             };
 
             let inner_stream_var = Ident::new("inner_stream", span);
+            let constructing_group_var = Ident::new("constructing_group", span);
+
             let mut inner_stream = TokenStream::new();
             inner_stream.append_all(quote_spanned!(span =>
-                let mut ref #inner_stream_var = ::proc_macro2::TokenStream::new();
+                let mut #inner_stream_var = ::proc_macro2::TokenStream::new();
             ));
             compile_with(group.stream().into_iter().map(TokenTreeQ::Plain), &mut inner_stream, &inner_stream_var);
             inner_stream.append_all(quote_spanned!(span =>
-                ::proc_macro2::Group::new(::proc_macro2::Delimiter::#delimiter, #requested_span)
+                let mut #constructing_group_var = ::proc_macro2::Group::new(::proc_macro2::Delimiter::#delimiter, #inner_stream_var);
+                #constructing_group_var.set_span(#requested_span);
+                #token_stream.extend(::std::iter::once(::proc_macro2::TokenTree::Group(#constructing_group_var)))
             ));
 
             stream.append_all(quote_spanned!(span => { #inner_stream }));

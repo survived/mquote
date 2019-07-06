@@ -1,11 +1,11 @@
 use std::iter;
 
 use proc_macro2::{self, TokenTree, Delimiter, Spacing, Span};
+use proc_quote::TokenStreamExt;
 
 use crate::error::{Result, Error};
 use crate::buffer::QTokens;
 use crate::language::*;
-use std::hint::unreachable_unchecked;
 
 type TokenStream = iter::Peekable<<proc_macro2::TokenStream as IntoIterator>::IntoIter>;
 
@@ -14,68 +14,19 @@ enum ContextItem {
     ZeroPoint { tokens: QTokens },
     If { branches: Vec<(TokenStream, QTokens)>, else_: Option<QTokens> },
     For { over: TokenStream, body: QTokens },
-    LevelHolder { hold: TokenStream, span: Span, delimiter: Delimiter, tokens: QTokens, end_span: Span },
+    LevelHolder { hold: TokenStream, span: Span, delimiter: Delimiter, tokens: QTokens },
 }
 
 
 struct Context {
-    token_stream: TokenStream,
     stack: Vec<ContextItem>,
 }
 
 impl Context {
-    pub fn new(token_stream: proc_macro2::TokenStream) -> Self {
+    pub fn new() -> Self {
         Self {
-            token_stream: token_stream.into_iter().peekable(),
             stack: vec![ContextItem::ZeroPoint { tokens: QTokens::new() }],
         }
-    }
-
-    pub fn next_token(&mut self) -> Result<Option<TokenTree>> {
-        if let Some(token) = self.token_stream.next() {
-            return Ok(Some(token));
-        }
-
-        let level_is_held = match self.stack.last() {
-            Some(ContextItem::LevelHolder { .. }) => true,
-            _ => false,
-        };
-
-        if level_is_held {
-            let (held, span, delimiter, tokens) = match self.stack.pop() {
-                Some(ContextItem::LevelHolder { hold, span, delimiter, tokens}) =>
-                    (hold, span, delimiter, tokens),
-                _ => unreachable!("guaranteed by level_is_held"),
-            };
-
-            self.put_qtoken(TokenTreeQ::Group(MQuoteGroup {
-                delimiter,
-                span,
-                tokens,
-            }));
-            self.token_stream = held;
-
-            return self.next_token();
-        }
-
-        if self.stack.len() == 1 {
-            return Ok(None)
-        }
-
-        let mut unclosed_tags = vec![];
-        let mut eof = None;
-
-        for item in self.stack.iter().rev() {
-            match item {
-                ContextItem::If { branches, .. } => unclosed_tags.push((branches[0].0, "endif")),
-                ContextItem::For { tag_span, .. } => unclosed_tags.push((*tag_span, "endfor")),
-                ContextItem::LevelHolder { end_span, .. } => { eof = Some(*end_span); break },
-                ContextItem::ZeroPoint { .. } => break,
-            }
-        }
-
-        let msg = unclosed_tags.join("}, #{");
-        return Err(Error::new(eof.unwrap_or(Span::call_site()), format!("expected: #{{{}}}", msg)))
     }
 
     pub fn put_qtoken(&mut self, token: TokenTreeQ) {
@@ -165,8 +116,31 @@ impl Context {
         Ok(())
     }
 
-    pub fn put_group(&mut self, group: )
+    pub fn put_holder(&mut self, held_tokens: TokenStream, span: Span, delimiter: Delimiter) -> Result<()> {
+        self.stack.push(ContextItem::LevelHolder {
+            hold: held_tokens,
+            span,
+            delimiter,
+            tokens: QTokens::new(),
+        });
+        Ok(())
+    }
 
+    /// Releases holder on the top of stack
+    pub fn try_release_holder(&mut self) -> Option<TokenStream> {
+        match self.stack.last() {
+            Some(ContextItem::LevelHolder { .. }) => (),
+            _ => return None,
+        }
+        match self.stack.pop() {
+            Some(ContextItem::LevelHolder { hold, span, delimiter, tokens }) => {
+                let group = MQuoteGroup { span, delimiter, tokens };
+                self.put_qtoken(TokenTreeQ::Group(group));
+                Some(hold)
+            }
+            _ => unreachable!("guaranteed by above match"),
+        }
+    }
 
     pub fn lookup_end_tag(&self) -> Option<(usize, &'static str)> {
         let tag = self.stack.iter().rev()
@@ -184,77 +158,127 @@ impl Context {
                 => unreachable!("guaranteed by tag filter"),
         }
     }
-}
 
-fn parse(token_stream: proc_macro2::TokenStream) -> Result<TokenStreamQ> {
-    let mut context = Context::new(token_stream);
+    pub fn pick_result(mut self) -> Result<QTokens> {
+        match self.stack.len() {
+            0 => panic!("inconsistent context: at least ZeroPoint must be in the context stack"),
+            1 => match self.stack.pop() {
+                Some(ContextItem::ZeroPoint { tokens }) => return Ok(tokens),
+                Some(_) => panic!("inconsistent context: the last element in stack must be ZeroPoint"),
+                _ => unreachable!("guaranteed by outer match"),
+            },
+            _ => (),
+        }
 
-    while let Some(token) = context.next_token()? {
-        // Check if it's reserved #{...}
-        match token {
-            TokenTree::Punct(punct) => {
-                let next_is_group = || token_stream.peek().map(TokenTreeExt::is_group).unwrap_or(false);
-                if punct.as_char() == '#' && punct.spacing() == Spacing::Alone && next_is_group() {
-                    let group = match token_stream.next() {
-                        TokenTree::Group(group) => group,
-                        _ => unreachable!("guaranteed by if")
-                    };
-                    let mut inner_stream = group.stream().into_iter();
+        let mut unclosed_tags = vec![];
+        let mut eof = None;
 
-                    match inner_stream.next() {
-                        Some(TokenTree::Group(escaping)) => {
-                            if let Some(token) = inner_steam.next() {
-                                let mut err = Error::new(token.span(), "invalid escaping");
-                                let last_span = inner_stream
-                                    .map(|token| token.span())
-                                    .last();
-                                if let Some(span) = last_span {
-                                    err.end_span(span);
-                                }
-                                return Err(err);
-                            }
-                            output.push(TokenTreeQ::Plain(punct.into()));
-                            output.push(TokenTreeQ::Plain(group.into()));
-                        }
-                        Some(TokenTree::Ident(ident)) => {
-                            let span = ident.span();
-                            match ident.to_string().as_str() {
-                                "if" => context.put_if(span, inner_stream)?,
-                                "elif" => context.put_elif(span, inner_stream)?,
-                                "else" => context.put_else(span)?,
-                                "endif" => context.put_endif(span)?,
-                                _ => {
-                                    let mut token_stream = proc_macro2::TokenStream::new();
-                                    token_stream.append(TokenTree::Ident(ident));
-                                    token_stream.append_all(inner_stream);
-                                    context.put_qtoken(TokenTreeQ::Insertion(token_stream));
-                                },
-                            }
-                        }
-                        Some(token) =>
-                            return Err(Error::new(token.span(), "invalid mquote syntax, expected tag")),
-                        None =>
-                            return Err(Error::new(group.span(), "expected tag or expression, got nothing"))
-                    }
-                } else {
-                    context.put_qtoken(TokenTreeQ::Plain(punct.into()))
-                }
+        for item in self.stack.iter().rev() {
+            match item {
+                ContextItem::If { .. } => unclosed_tags.push("endif"),
+                ContextItem::For { .. } => unclosed_tags.push("endfor"),
+                ContextItem::LevelHolder { span, .. } => { eof = Some(*span); break },
+                ContextItem::ZeroPoint { .. } => break,
             }
         }
+
+        let msg = unclosed_tags.join("}, #{");
+        return Err(Error::new(eof.unwrap_or(Span::call_site()), format!("expected: #{{{}}}", msg)))
+    }
+}
+
+pub fn parse(token_stream: proc_macro2::TokenStream) -> Result<QTokens> {
+    let mut token_stream = token_stream.into_iter().peekable();
+    let mut context = Context::new();
+
+    loop {
+        while let Some(token) = token_stream.next() {
+            // Check if it's reserved #{...}
+            match token {
+                TokenTree::Punct(punct) => {
+                    let mut next_is_group = || token_stream.peek()
+                        .into_iter()
+                        .flat_map(TokenTreeExt::as_group)
+                        .filter(|group| group.delimiter() == Delimiter::Brace)
+                        .next().is_some();
+
+                    if punct.as_char() == '#' && punct.spacing() == Spacing::Alone && next_is_group() {
+                        let group = match token_stream.next() {
+                            Some(TokenTree::Group(group)) => group,
+                            _ => unreachable!("guaranteed by if")
+                        };
+                        let mut inner_stream = group.stream().into_iter().peekable();
+
+                        match inner_stream.next() {
+                            Some(TokenTree::Group(escaping)) => {
+                                if let Some(token) = inner_stream.next() {
+                                    let err = Error::new(token.span(), "invalid escaping");
+                                    let last_span = inner_stream
+                                        .map(|token| token.span())
+                                        .last();
+                                    return Err(if let Some(span) = last_span {
+                                        err.end_span(span)
+                                    } else {
+                                        err
+                                    })
+                                }
+                                context.put_qtoken(TokenTreeQ::Plain(punct.into()));
+                                context.put_qtoken(TokenTreeQ::Plain(escaping.into()));
+                            }
+                            Some(TokenTree::Ident(ident)) => {
+                                let span = ident.span();
+                                match ident.to_string().as_str() {
+                                    "if" => context.put_if(span, inner_stream)?,
+                                    "elif" => context.put_elif(span, inner_stream)?,
+                                    "else" => context.put_else(span)?,
+                                    "endif" => context.put_endif(span)?,
+                                    _ => {
+                                        let mut token_stream = proc_macro2::TokenStream::new();
+                                        token_stream.append(TokenTree::Ident(ident));
+                                        token_stream.append_all(inner_stream);
+                                        context.put_qtoken(TokenTreeQ::Insertion(token_stream));
+                                    },
+                                }
+                            }
+                            Some(token) =>
+                                return Err(Error::new(token.span(), "invalid mquote syntax, expected tag")),
+                            None =>
+                                return Err(Error::new(group.span(), "expected tag or expression, got nothing"))
+                        }
+                    } else {
+                        context.put_qtoken(TokenTreeQ::Plain(punct.into()))
+                    }
+                }
+                TokenTree::Group(group) => {
+                    let span = group.span();
+                    let delimiter = group.delimiter();
+                    let inner_stream = group.stream();
+                    context.put_holder(token_stream, span, delimiter)?;
+                    token_stream = inner_stream.into_iter().peekable();
+                }
+                token => context.put_qtoken(TokenTreeQ::Plain(token)),
+            }
+        }
+
+        if let Some(held_tokens) = context.try_release_holder() {
+            token_stream = held_tokens;
+            continue;
+        }
+        break;
     }
 
-    unimplemented!()
+    context.pick_result()
 }
 
 trait TokenTreeExt {
-    fn is_group(&self) -> bool;
+    fn as_group(&self) -> Option<&proc_macro2::Group>;
 }
 
 impl TokenTreeExt for TokenTree {
-    fn is_group(&self) -> bool {
+    fn as_group(&self) -> Option<&proc_macro2::Group> {
         match self {
-            &TokenTree::Group(_) => true,
-            _ => false,
+            &TokenTree::Group(ref group) => Some(group),
+            _ => None,
         }
     }
 }

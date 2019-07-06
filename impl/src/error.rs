@@ -1,4 +1,4 @@
-use proc_macro2::{TokenStream, TokenTree, Spacing, Span};
+use proc_macro2::{TokenStream, Span};
 use proc_quote::quote_spanned;
 
 pub type Result<T> = std::result::Result<T, Error>;
