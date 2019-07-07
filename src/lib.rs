@@ -8,6 +8,10 @@ use proc_macro_hack::proc_macro_hack;
 #[proc_macro_hack]
 pub use mquote_impl::mquote;
 
+#[proc_macro_hack]
+pub use mquote_impl::mquote_spanned;
+
+#[cfg(not(mquote_span_testing))]
 #[doc(hidden)]
 pub mod __rt {
     pub mod quote {
@@ -17,3 +21,8 @@ pub mod __rt {
         pub use crate::proc_macro2::*;
     }
 }
+
+#[cfg(mquote_span_testing)]
+#[doc(hidden)]
+#[path = "mocked_runtime/mod.rs"]
+pub mod __rt;

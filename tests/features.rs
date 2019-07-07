@@ -49,8 +49,8 @@ fn using_same_variable_twice() {
 fn nesting_if() {
     let q = mquote!{{
         #{if 2 + 2 == 4}
-            123
+            { 123 }
         #{endif}
     }};
-    assert_eq!(q.to_string(), "{ 123 }");
+    assert_eq!(q.to_string(), "{ { 123 } }");
 }

@@ -1,7 +1,7 @@
 use std::iter;
 
 use proc_macro2::{self, TokenTree, Delimiter, Spacing, Span};
-use proc_quote::TokenStreamExt;
+use quote::TokenStreamExt;
 
 use crate::error::{Result, Error};
 use crate::buffer::QTokens;
@@ -187,8 +187,40 @@ impl Context {
     }
 }
 
-pub fn parse(token_stream: proc_macro2::TokenStream) -> Result<QTokens> {
+pub fn parse_unspanned(token_stream: proc_macro2::TokenStream) -> Result<QTokens> {
+    parse(token_stream.into_iter().peekable())
+}
+
+pub fn parse_spanned(token_stream: proc_macro2::TokenStream) -> Result<(proc_macro2::TokenStream, QTokens)> {
     let mut token_stream = token_stream.into_iter().peekable();
+    let mut requested_span = vec![];
+
+    while let Some(token) = token_stream.next() {
+        if detect_end_of_span(&token, &mut token_stream) {
+            return Ok((requested_span.into_iter().collect(), parse(token_stream)?))
+        }
+        requested_span.push(token)
+    }
+
+    return Err(Error::new(Span::call_site(), "expected span separated by '=>' from tokens"))
+}
+
+fn detect_end_of_span(current_token: &TokenTree, rest_stream: &mut TokenStream) -> bool {
+    match current_token {
+        TokenTree::Punct(punct) if punct.as_char() == '=' && punct.spacing() == Spacing::Joint
+            => (),
+        _ => return false,
+    }
+    match rest_stream.peek() {
+        Some(TokenTree::Punct(punct)) if punct.as_char() == '>' && punct.spacing() == Spacing::Alone
+            => (),
+        _ => return false,
+    }
+    let _ = rest_stream.next();
+    true
+}
+
+fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
     let mut context = Context::new();
 
     loop {
