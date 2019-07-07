@@ -31,7 +31,7 @@ Even putting simple expression like `my_struct.field` must be handled in this wa
 It supports:
 - [x] [Expression insertion](#expression-insertion)
 - [x] [**if/else**](#if--elif--else) condition
-- [ ] [**for**](#for) iteration
+- [x] [**for**](#for) iteration
 - [ ] [**match**](#matching)ing 
 
 This crate is not about syntax sugar only! In fact using `mquote!` in complicated
@@ -63,7 +63,7 @@ fn put_filter(enabled: bool) -> TokenStream {
 }
 ```
 
-## if / elif / else
+## If / elif / else
 ```rust
 fn define_container(amount: usize) -> TokenStream {
     mquote!{
@@ -78,7 +78,7 @@ fn define_container(amount: usize) -> TokenStream {
 }
 ```
 
-## for
+## For
 ```rust
 fn for_usage(fields: Vec<(Ident, Ident)>){
     mquote!{
@@ -91,13 +91,13 @@ fn for_usage(fields: Vec<(Ident, Ident)>){
 }
 ```
 
-## matching
+## Matching
 ```rust
 // TODO
 ```
 
 ## Escaping `#{}`
-If you wanna put `#{abc}` as is, you should double braces:
+If you want to put `#{abc}` as is, you should double braces:
 ```rust
 fn it_works() {
     let tokens = mquote!(#{{abc}});
