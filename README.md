@@ -34,11 +34,6 @@ It supports:
 - [x] [**for**](#for) iteration
 - [ ] [**match**](#matching)ing 
 
-This crate is not about syntax sugar only! In fact using `mquote!` in complicated
-cases gives a bit of performance increasing since it does not create a several
-`TokenStream`s and join them together, it handles everything within single 
-`TokenStream`.
-
 So you're able to rewrite above code:
 ```rust
 mquote!{
@@ -48,6 +43,11 @@ mquote!{
     fn regular_method() { ... }
 }
 ```
+
+This crate is not about syntax sugar only! In fact using `mquote!` in complicated
+cases gives a bit of performance increasing since it does not create a several
+`TokenStream`s and join them together, it handles everything within single 
+`TokenStream`.
 
 # More examples
 
