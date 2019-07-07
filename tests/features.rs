@@ -1,3 +1,6 @@
+extern crate proc_macro2;
+
+use proc_macro2::{Ident, Span};
 use mquote::mquote;
 
 #[test]
@@ -23,6 +26,23 @@ fn if_branches() {
         #{endif}
     );
     assert_eq!(q.to_string(), "2i32");
+}
+
+#[test]
+fn for_expr() {
+    let idents = vec![
+        Ident::new("ident1", Span::call_site()),
+        Ident::new("ident2", Span::call_site()),
+        Ident::new("ident3", Span::call_site()),
+        Ident::new("ident4", Span::call_site()),
+    ];
+
+    let q = mquote!(
+        #{for ident in idents}
+            #{ident}
+        #{endfor}
+    );
+    assert_eq!(q.to_string(), "ident1 ident2 ident3 ident4");
 }
 
 #[test]

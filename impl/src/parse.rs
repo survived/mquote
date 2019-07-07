@@ -85,7 +85,7 @@ impl Context {
             Some((_, "endif")) =>
                 return Err(Error::new(span, "#{if .. } is on different nesting level from #{endif}, that is not permitted")),
             Some((0, expected)) =>
-                return Err(Error::new(span, format!("expected {}, got endif", expected))),
+                return Err(Error::new(span, format!("expected #{{{}}}, got #{{endif}}", expected))),
             _ =>
                 return Err(Error::new(span, "unexpected endif")),
         }
@@ -112,6 +112,38 @@ impl Context {
         }
 
         self.put_qtoken(TokenTreeQ::If(mquote_if));
+
+        Ok(())
+    }
+
+    pub fn put_for(&mut self, _span: Span, over: TokenStream) -> Result<()> {
+        self.stack.push(ContextItem::For {
+            over,
+            body: QTokens::new(),
+        });
+        Ok(())
+    }
+
+    pub fn put_endfor(&mut self, span: Span) -> Result<()> {
+        match self.lookup_end_tag() {
+            Some((0, "endfor")) => (),
+            Some((_, "endfor")) =>
+                return Err(Error::new(span, "#{for .. } is on different nesting level from #{endfor}, that is not permitted")),
+            Some((0, expected)) =>
+                return Err(Error::new(span, format!("expected #{{{}}}, got #{{endfor}}", expected))),
+            _ =>
+                return Err(Error::new(span, "unexpected endfor")),
+        }
+
+        let (over, body) = match self.stack.pop() {
+            Some(ContextItem::For{ over, body }) => (over, body),
+            _ => unreachable!("guaranteed by lookup_end_tag matching"),
+        };
+
+        self.put_qtoken(TokenTreeQ::For(MQuoteFor{
+            over: over.collect(),
+            body,
+        }));
 
         Ok(())
     }
@@ -264,6 +296,8 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                     "elif" => context.put_elif(span, inner_stream)?,
                                     "else" => context.put_else(span)?,
                                     "endif" => context.put_endif(span)?,
+                                    "for" => context.put_for(span, inner_stream)?,
+                                    "endfor" => context.put_endfor(span)?,
                                     _ => {
                                         let mut token_stream = proc_macro2::TokenStream::new();
                                         token_stream.append(TokenTree::Ident(ident));

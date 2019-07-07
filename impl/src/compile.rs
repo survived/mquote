@@ -86,7 +86,14 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
             }
             let else_branch = Group::new(Delimiter::Brace, else_stream);
 
-            stream.append_all(quote!( if #condition #then_branch else #else_branch))
+            stream.append_all(quote!( if #condition #then_branch else #else_branch ))
+        }
+        TokenTreeQ::For(MQuoteFor{ over, body }) => {
+            let mut body_stream = TokenStream::new();
+            compile_with(body, &mut body_stream, scope);
+            let body = Group::new(Delimiter::Brace, body_stream);
+
+            stream.append_all(quote!( for #over #body ))
         }
     }
 }

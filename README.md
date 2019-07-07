@@ -1,8 +1,6 @@
 # TODO
-* mquote_spanned
-* remove dependency on quote and proc_macro2 from consumer
-* escaping
-* parsing
+* \#{endfor ...}, #{endif ...}
+* different code breaks
 * for, match
 * examples
 
