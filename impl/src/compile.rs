@@ -95,6 +95,20 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
 
             stream.append_all(quote!( for #over #body ))
         }
+        TokenTreeQ::Match(MQuoteMatch{ of, patterns }) => {
+            let patterns = patterns.into_iter()
+                .map(|(pattern, body)| {
+                    let mut stream = TokenStream::new();
+                    compile_with(body, &mut stream, scope);
+                    let body = Group::new(Delimiter::Brace, stream);
+                    (pattern, body)});
+            let mut match_body = TokenStream::new();
+            for (pattern, body) in patterns {
+                match_body.append_all(quote!(#pattern => #body));
+            }
+            let match_body = Group::new(Delimiter::Brace, match_body);
+            stream.append_all(quote!(match #of #match_body));
+        }
     }
 }
 

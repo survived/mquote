@@ -46,6 +46,22 @@ fn for_expr() {
 }
 
 #[test]
+fn match_expr() {
+    let a = Some("abc");
+    let q = mquote!(
+        #{match &a}
+            #{of Some(s) if s.is_empty()}
+                "empty case"
+            #{of Some(s)}
+                #{s}
+            #{of None}
+                "default value"
+        #{endmatch}
+    );
+    assert_eq!(q.to_string(), "\"abc\"");
+}
+
+#[test]
 fn escaping() {
     let q = mquote!(#{{123}});
     assert_eq!(q.to_string(), "# { 123 }");

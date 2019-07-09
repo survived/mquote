@@ -6,8 +6,20 @@ pub enum TokenTreeQ {
     Insertion(TokenStream),
     If(MQuoteIf),
     For(MQuoteFor),
+    Match(MQuoteMatch),
     Group(MQuoteGroup),
     Plain(TokenTree),
+}
+
+impl TokenTreeQ {
+    pub fn span(&self) -> Span {
+        match self {
+            TokenTreeQ::Group(group) => group.span,
+            TokenTreeQ::Plain(token) => token.span(),
+            TokenTreeQ::Insertion(_) | TokenTreeQ::If(_) | TokenTreeQ::For(_) | TokenTreeQ::Match(_)
+                => Span::call_site(),
+        }
+    }
 }
 
 pub struct MQuoteGroup {
@@ -25,4 +37,9 @@ pub struct MQuoteIf {
 pub struct MQuoteFor {
     pub over: TokenStream,
     pub body: QTokens,
+}
+
+pub struct MQuoteMatch {
+    pub of: TokenStream,
+    pub patterns: Vec<(TokenStream, QTokens)>,
 }

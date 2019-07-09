@@ -1,7 +1,9 @@
 # TODO
 * \#{endfor ...}, #{endif ...}
-* different code breaks
+* different code breaks includeing special case: between #{match .. } ... #{of .. }
 * for, match
+* maybe language optimization?
+* span of if for match
 * examples
 
 # Motivation

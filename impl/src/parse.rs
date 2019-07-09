@@ -14,6 +14,7 @@ enum ContextItem {
     ZeroPoint { tokens: QTokens },
     If { branches: Vec<(TokenStream, QTokens)>, else_: Option<QTokens> },
     For { over: TokenStream, body: QTokens },
+    Match { of: TokenStream, patterns: Vec<(TokenStream, QTokens)> },
     LevelHolder { hold: TokenStream, span: Span, delimiter: Delimiter, tokens: QTokens },
 }
 
@@ -29,7 +30,7 @@ impl Context {
         }
     }
 
-    pub fn put_qtoken(&mut self, token: TokenTreeQ) {
+    pub fn put_qtoken(&mut self, token: TokenTreeQ) -> Result<()> {
         match self.stack.last_mut() {
             Some(ContextItem::If { branches, else_}) => {
                 match else_.as_mut() {
@@ -41,12 +42,19 @@ impl Context {
             }
             Some(ContextItem::For { body, .. }) =>
                 body.push(token),
+            Some(ContextItem::Match { patterns, .. }) => {
+                match patterns.last_mut() {
+                    Some(pattern) => pattern.1.push(token),
+                    None => return Err(Error::new(token.span(), "Expected #{of ..}")),
+                };
+            }
             Some(ContextItem::LevelHolder { tokens, .. }) =>
                 tokens.push(token),
             Some(ContextItem::ZeroPoint { tokens }) =>
                 tokens.push(token),
             None => panic!("at least ZeroPoint must be in the context stack"),
         }
+        Ok(())
     }
 
     pub fn put_if(&mut self, _span: Span, condition: TokenStream) -> Result<()> {
@@ -111,7 +119,7 @@ impl Context {
             mquote_if = next_if;
         }
 
-        self.put_qtoken(TokenTreeQ::If(mquote_if));
+        self.put_qtoken(TokenTreeQ::If(mquote_if))?;
 
         Ok(())
     }
@@ -143,9 +151,50 @@ impl Context {
         self.put_qtoken(TokenTreeQ::For(MQuoteFor{
             over: over.collect(),
             body,
-        }));
+        }))
+    }
 
+    pub fn put_match(&mut self, _span: Span, of: TokenStream) -> Result<()> {
+        self.stack.push(ContextItem::Match {
+            of,
+            patterns: vec![],
+        });
         Ok(())
+    }
+
+    pub fn put_of(&mut self, span: Span, pattern: TokenStream) -> Result <()> {
+        match self.stack.last_mut() {
+            Some(ContextItem::Match { patterns, .. }) => {
+                patterns.push((pattern, QTokens::new()));
+                Ok(())
+            }
+            _ => Err(Error::new(span, "#{of .. } is only acceptable in context of \
+                    #{match .. } ... #{endmatch}")),
+        }
+    }
+
+    pub fn put_endmatch(&mut self, span: Span) -> Result<()> {
+        match self.lookup_end_tag() {
+            Some((0, "endmatch")) => (),
+            Some((_, "endmatch")) =>
+                return Err(Error::new(span, "#{match .. } is on different nesting level from #{endmatch}, that is not permitted")),
+            Some((0, expected)) =>
+                return Err(Error::new(span, format!("expected #{{{}}}, got #{{endmatch}}", expected))),
+            _ =>
+                return Err(Error::new(span, "unexpected endmatch")),
+        }
+
+        let (of, patterns) = match self.stack.pop() {
+            Some(ContextItem::Match {of, patterns}) => (of, patterns),
+            _ => unreachable!("guaranteed by above match"),
+        };
+
+        self.put_qtoken(TokenTreeQ::Match(MQuoteMatch{
+            of: of.collect(),
+            patterns: patterns.into_iter()
+                .map(|(pattern, body)| (pattern.collect(), body))
+                .collect()
+        }))
     }
 
     pub fn put_holder(&mut self, held_tokens: TokenStream, span: Span, delimiter: Delimiter) -> Result<()> {
@@ -159,7 +208,7 @@ impl Context {
     }
 
     /// Releases holder on the top of stack
-    pub fn try_release_holder(&mut self) -> Option<TokenStream> {
+    pub fn try_release_holder(&mut self) -> Option<Result<TokenStream>> {
         match self.stack.last() {
             Some(ContextItem::LevelHolder { .. }) => (),
             _ => return None,
@@ -167,8 +216,10 @@ impl Context {
         match self.stack.pop() {
             Some(ContextItem::LevelHolder { hold, span, delimiter, tokens }) => {
                 let group = MQuoteGroup { span, delimiter, tokens };
-                self.put_qtoken(TokenTreeQ::Group(group));
-                Some(hold)
+                match self.put_qtoken(TokenTreeQ::Group(group)) {
+                    Ok(()) => Some(Ok(hold)),
+                    Err(e) => Some(Err(e)),
+                }
             }
             _ => unreachable!("guaranteed by above match"),
         }
@@ -185,6 +236,7 @@ impl Context {
         match tag {
             Some((i, ContextItem::If { .. })) => Some((i, "endif")),
             Some((i, ContextItem::For { .. })) => Some((i, "endfor")),
+            Some((i, ContextItem::Match { .. })) => Some((i, "endmatch")),
             None => None,
             Some((_, ContextItem::ZeroPoint { .. })) | Some((_, ContextItem::LevelHolder { .. }))
                 => unreachable!("guaranteed by tag filter"),
@@ -209,6 +261,7 @@ impl Context {
             match item {
                 ContextItem::If { .. } => unclosed_tags.push("endif"),
                 ContextItem::For { .. } => unclosed_tags.push("endfor"),
+                ContextItem::Match { .. } => unclosed_tags.push("endmatch"),
                 ContextItem::LevelHolder { span, .. } => { eof = Some(*span); break },
                 ContextItem::ZeroPoint { .. } => break,
             }
@@ -286,8 +339,8 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                         err
                                     })
                                 }
-                                context.put_qtoken(TokenTreeQ::Plain(punct.into()));
-                                context.put_qtoken(TokenTreeQ::Plain(escaping.into()));
+                                context.put_qtoken(TokenTreeQ::Plain(punct.into()))?;
+                                context.put_qtoken(TokenTreeQ::Plain(escaping.into()))?;
                             }
                             Some(TokenTree::Ident(ident)) => {
                                 let span = ident.span();
@@ -298,11 +351,14 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                     "endif" => context.put_endif(span)?,
                                     "for" => context.put_for(span, inner_stream)?,
                                     "endfor" => context.put_endfor(span)?,
+                                    "match" => context.put_match(span, inner_stream)?,
+                                    "of" => context.put_of(span, inner_stream)?,
+                                    "endmatch" => context.put_endmatch(span)?,
                                     _ => {
                                         let mut token_stream = proc_macro2::TokenStream::new();
                                         token_stream.append(TokenTree::Ident(ident));
                                         token_stream.append_all(inner_stream);
-                                        context.put_qtoken(TokenTreeQ::Insertion(token_stream));
+                                        context.put_qtoken(TokenTreeQ::Insertion(token_stream))?;
                                     },
                                 }
                             }
@@ -312,7 +368,7 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                 return Err(Error::new(group.span(), "expected tag or expression, got nothing"))
                         }
                     } else {
-                        context.put_qtoken(TokenTreeQ::Plain(punct.into()))
+                        context.put_qtoken(TokenTreeQ::Plain(punct.into()))?
                     }
                 }
                 TokenTree::Group(group) => {
@@ -322,13 +378,17 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                     context.put_holder(token_stream, span, delimiter)?;
                     token_stream = inner_stream.into_iter().peekable();
                 }
-                token => context.put_qtoken(TokenTreeQ::Plain(token)),
+                token => context.put_qtoken(TokenTreeQ::Plain(token))?,
             }
         }
 
-        if let Some(held_tokens) = context.try_release_holder() {
-            token_stream = held_tokens;
-            continue;
+        match context.try_release_holder() {
+            Some(Ok(held_tokens)) => {
+                token_stream = held_tokens;
+                continue;
+            }
+            Some(Err(err)) => return Err(err),
+            None => (),
         }
         break;
     }
