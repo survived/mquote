@@ -1,9 +1,7 @@
 # TODO
 * \#{endfor ...}, #{endif ...}
 * different code breaks includeing special case: between #{match .. } ... #{of .. }
-* for, match
 * maybe language optimization?
-* span of if for match
 * examples
 
 # Motivation
@@ -34,7 +32,7 @@ It supports:
 - [x] [Expression insertion](#expression-insertion)
 - [x] [**if/else**](#if--elif--else) condition
 - [x] [**for**](#for) iteration
-- [ ] [**match**](#matching)ing 
+- [x] [**match**](#matching)ing 
 
 So you're able to rewrite above code:
 ```rust

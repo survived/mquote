@@ -1,4 +1,4 @@
-use std::iter;
+use std::iter::{self, FromIterator};
 
 use proc_macro2::{self, TokenTree, Delimiter, Spacing, Span};
 use quote::TokenStreamExt;
@@ -12,9 +12,9 @@ type TokenStream = iter::Peekable<<proc_macro2::TokenStream as IntoIterator>::In
 
 enum ContextItem {
     ZeroPoint { tokens: QTokens },
-    If { branches: Vec<(TokenStream, QTokens)>, else_: Option<QTokens> },
-    For { over: TokenStream, body: QTokens },
-    Match { of: TokenStream, patterns: Vec<(TokenStream, QTokens)> },
+    If { branches: Vec<(Span, TokenStream, QTokens)>, else_: Option<QTokens> },
+    For { span: Span, over: TokenStream, body: QTokens },
+    Match { span: Span, of: TokenStream, patterns: Vec<(Span, TokenStream, QTokens)> },
     LevelHolder { hold: TokenStream, span: Span, delimiter: Delimiter, tokens: QTokens },
 }
 
@@ -37,14 +37,14 @@ impl Context {
                     Some(tokens) => tokens.push(token),
                     None => branches.last_mut()
                         .expect("guaranteed by put_if")
-                        .1.push(token)
+                        .2.push(token)
                 }
             }
             Some(ContextItem::For { body, .. }) =>
                 body.push(token),
             Some(ContextItem::Match { patterns, .. }) => {
                 match patterns.last_mut() {
-                    Some(pattern) => pattern.1.push(token),
+                    Some(pattern) => pattern.2.push(token),
                     None => return Err(Error::new(token.span(), "Expected #{of ..}")),
                 };
             }
@@ -57,9 +57,9 @@ impl Context {
         Ok(())
     }
 
-    pub fn put_if(&mut self, _span: Span, condition: TokenStream) -> Result<()> {
+    pub fn put_if(&mut self, span: Span, condition: TokenStream) -> Result<()> {
         self.stack.push(ContextItem::If {
-            branches: vec![(condition, QTokens::new())],
+            branches: vec![(span, condition, QTokens::new())],
             else_: None,
         });
         Ok(())
@@ -67,7 +67,7 @@ impl Context {
     pub fn put_elif(&mut self, span: Span, condition: TokenStream) -> Result<()> {
         match self.stack.last_mut() {
             Some(ContextItem::If { branches, .. }) => {
-                branches.push((condition, QTokens::new()));
+                branches.push((span, condition, QTokens::new()));
                 Ok(())
             }
             _ => Err(Error::new(span, "elif is only acceptable in context \
@@ -103,15 +103,17 @@ impl Context {
             _ => unreachable!("guaranteed by lookup_end_tag matching"),
         };
 
-        let (condition, then) = branches.pop().expect("guaranteed by put_if");
+        let (if_span, condition, then) = branches.pop().expect("guaranteed by put_if");
         let mut mquote_if = MQuoteIf {
+            span: if_span,
             condition: condition.collect(),
             then,
             else_,
         };
 
-        while let Some((condition, then)) = branches.pop() {
+        while let Some((if_span, condition, then)) = branches.pop() {
             let next_if = MQuoteIf {
+                span: if_span,
                 condition: condition.collect(),
                 then,
                 else_: Some(QTokens::from(vec![TokenTreeQ::If(mquote_if)])),
@@ -124,8 +126,9 @@ impl Context {
         Ok(())
     }
 
-    pub fn put_for(&mut self, _span: Span, over: TokenStream) -> Result<()> {
+    pub fn put_for(&mut self, span: Span, over: TokenStream) -> Result<()> {
         self.stack.push(ContextItem::For {
+            span,
             over,
             body: QTokens::new(),
         });
@@ -143,19 +146,21 @@ impl Context {
                 return Err(Error::new(span, "unexpected endfor")),
         }
 
-        let (over, body) = match self.stack.pop() {
-            Some(ContextItem::For{ over, body }) => (over, body),
+        let (span, over, body) = match self.stack.pop() {
+            Some(ContextItem::For{ span, over, body }) => (span, over, body),
             _ => unreachable!("guaranteed by lookup_end_tag matching"),
         };
 
         self.put_qtoken(TokenTreeQ::For(MQuoteFor{
+            span,
             over: over.collect(),
             body,
         }))
     }
 
-    pub fn put_match(&mut self, _span: Span, of: TokenStream) -> Result<()> {
+    pub fn put_match(&mut self, span: Span, of: TokenStream) -> Result<()> {
         self.stack.push(ContextItem::Match {
+            span,
             of,
             patterns: vec![],
         });
@@ -165,7 +170,7 @@ impl Context {
     pub fn put_of(&mut self, span: Span, pattern: TokenStream) -> Result <()> {
         match self.stack.last_mut() {
             Some(ContextItem::Match { patterns, .. }) => {
-                patterns.push((pattern, QTokens::new()));
+                patterns.push((span, pattern, QTokens::new()));
                 Ok(())
             }
             _ => Err(Error::new(span, "#{of .. } is only acceptable in context of \
@@ -184,15 +189,16 @@ impl Context {
                 return Err(Error::new(span, "unexpected endmatch")),
         }
 
-        let (of, patterns) = match self.stack.pop() {
-            Some(ContextItem::Match {of, patterns}) => (of, patterns),
+        let (span, of, patterns) = match self.stack.pop() {
+            Some(ContextItem::Match {span, of, patterns}) => (span, of, patterns),
             _ => unreachable!("guaranteed by above match"),
         };
 
         self.put_qtoken(TokenTreeQ::Match(MQuoteMatch{
+            span,
             of: of.collect(),
             patterns: patterns.into_iter()
-                .map(|(pattern, body)| (pattern.collect(), body))
+                .map(|(of_span, pattern, body)| (of_span, pattern.collect(), body))
                 .collect()
         }))
     }
@@ -354,16 +360,12 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                     "match" => context.put_match(span, inner_stream)?,
                                     "of" => context.put_of(span, inner_stream)?,
                                     "endmatch" => context.put_endmatch(span)?,
-                                    _ => {
-                                        let mut token_stream = proc_macro2::TokenStream::new();
-                                        token_stream.append(TokenTree::Ident(ident));
-                                        token_stream.append_all(inner_stream);
-                                        context.put_qtoken(TokenTreeQ::Insertion(token_stream))?;
-                                    },
+                                    _ =>
+                                        context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream()))?,
                                 }
                             }
-                            Some(token) =>
-                                return Err(Error::new(token.span(), "invalid mquote syntax, expected tag")),
+                            Some(_) =>
+                                context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream()))?,
                             None =>
                                 return Err(Error::new(group.span(), "expected tag or expression, got nothing"))
                         }

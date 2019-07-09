@@ -3,7 +3,7 @@ use proc_macro2::{TokenStream, TokenTree, Delimiter, Span};
 use crate::buffer::QTokens;
 
 pub enum TokenTreeQ {
-    Insertion(TokenStream),
+    Insertion(Span, TokenStream),
     If(MQuoteIf),
     For(MQuoteFor),
     Match(MQuoteMatch),
@@ -14,10 +14,12 @@ pub enum TokenTreeQ {
 impl TokenTreeQ {
     pub fn span(&self) -> Span {
         match self {
+            TokenTreeQ::Insertion(span, _) => *span,
+            TokenTreeQ::If(MQuoteIf{ span, .. }) => *span,
+            TokenTreeQ::For(MQuoteFor{ span, .. }) => *span,
+            TokenTreeQ::Match(MQuoteMatch{ span, .. }) => *span,
             TokenTreeQ::Group(group) => group.span,
             TokenTreeQ::Plain(token) => token.span(),
-            TokenTreeQ::Insertion(_) | TokenTreeQ::If(_) | TokenTreeQ::For(_) | TokenTreeQ::Match(_)
-                => Span::call_site(),
         }
     }
 }
@@ -29,17 +31,20 @@ pub struct MQuoteGroup {
 }
 
 pub struct MQuoteIf {
+    pub span: Span,
     pub condition: TokenStream,
     pub then: QTokens,
     pub else_: Option<QTokens>,
 }
 
 pub struct MQuoteFor {
+    pub span: Span,
     pub over: TokenStream,
     pub body: QTokens,
 }
 
 pub struct MQuoteMatch {
+    pub span: Span,
     pub of: TokenStream,
-    pub patterns: Vec<(TokenStream, QTokens)>,
+    pub patterns: Vec<(Span, TokenStream, QTokens)>,
 }
