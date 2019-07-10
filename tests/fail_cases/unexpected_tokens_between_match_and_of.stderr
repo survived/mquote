@@ -1,0 +1,5 @@
+error: Expected #{of ..}
+ --> $DIR/unexpected_tokens_between_match_and_of.rs:7:28
+  |
+7 |         #{match Some("1")} unexpected stuff
+  |                            ^^^^^^^^^^
