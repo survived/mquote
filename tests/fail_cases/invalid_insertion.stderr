@@ -1,0 +1,25 @@
+error: expected expression, found `;`
+  --> $DIR/invalid_insertion.rs:10:10
+   |
+10 |         #{!!!}
+   |          ^^^^^ expected expression
+
+error[E0425]: cannot find value `heh` in this scope
+ --> $DIR/invalid_insertion.rs:7:11
+  |
+7 |         #{heh}
+  |           ^^^ not found in this scope
+
+error[E0425]: cannot find value `requested_span` in this scope
+ --> $DIR/invalid_insertion.rs:8:11
+  |
+8 |         #{requested_span}
+  |           ^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `inner_stream` in this scope
+ --> $DIR/invalid_insertion.rs:9:13
+  |
+9 |         { #{inner_stream} }
+  |             ^^^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0425`.

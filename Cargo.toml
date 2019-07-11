@@ -12,3 +12,4 @@ proc-macro2 = "0.4"
 
 [dev-dependencies]
 proc-macro2 = "0.4"
+trybuild = "1.0"
