@@ -1,5 +1,7 @@
+use std::cell::RefCell;
+
 use proc_macro2::*;
-use quote::{TokenStreamExt, quote_spanned};
+use quote::{ToTokens, TokenStreamExt, quote_spanned};
 
 use crate::language::*;
 use crate::buffer::QTokens;
@@ -40,6 +42,7 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
     match token {
         TokenTreeQ::Plain(token) => put_token(token, stream, scope),
         TokenTreeQ::Insertion(span, tokens) => {
+            let tokens = ToTokensHack::from(tokens);
             let insertion_var = Ident::new("insertion", Span::call_site());
             stream.append_all(quote_spanned!(span => {
                 let ref #insertion_var = #tokens;
@@ -76,6 +79,8 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
             }));
         }
         TokenTreeQ::If(MQuoteIf{ span, condition, then, else_}) => {
+            let condition = ToTokensHack::from(condition);
+
             let mut then_stream = TokenStream::new();
             compile_with(then, &mut then_stream, scope);
             let mut then_branch = Group::new(Delimiter::Brace, then_stream);
@@ -91,6 +96,8 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
             stream.append_all(quote_spanned!( span => if #condition #then_branch else #else_branch ))
         }
         TokenTreeQ::For(MQuoteFor{ span, over, body }) => {
+            let over = ToTokensHack::from(over);
+
             let mut body_stream = TokenStream::new();
             compile_with(body, &mut body_stream, scope);
             let mut body = Group::new(Delimiter::Brace, body_stream);
@@ -99,13 +106,15 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
             stream.append_all(quote_spanned!( span => for #over #body ))
         }
         TokenTreeQ::Match(MQuoteMatch{ span, of, patterns }) => {
+            let of = ToTokensHack::from(of);
+
             let patterns = patterns.into_iter()
                 .map(|(of_span, pattern, body)| {
                     let mut stream = TokenStream::new();
                     compile_with(body, &mut stream, scope);
                     let mut body = Group::new(Delimiter::Brace, stream);
                     body.set_span(of_span);
-                    (of_span, pattern, body)});
+                    (of_span, ToTokensHack::from(pattern), body)});
             let mut match_body = TokenStream::new();
             for (of_span, pattern, body) in patterns {
                 match_body.append_all(quote_spanned!( of_span => #pattern => #body ));
@@ -164,5 +173,20 @@ fn put_token(token: TokenTree, stream: &mut TokenStream, scope: &Scope) {
             };
             put_qtoken(TokenTreeQ::Group(qtoken), stream, scope)
         }
+    }
+}
+
+/// Wraps TokenTree iterator and implements ToTokens. Be careful in use.
+struct ToTokensHack<I>(RefCell<Option<I>>);
+
+impl<I> From<I> for ToTokensHack<I> {
+    fn from(iter: I) -> Self {
+        ToTokensHack(Some(iter).into())
+    }
+}
+
+impl<I> ToTokens for ToTokensHack<I> where I: Iterator<Item=TokenTree> {
+    fn to_tokens(&self, token_stream: &mut TokenStream) {
+        token_stream.extend(self.0.borrow_mut().take().expect("tokens are already taken"))
     }
 }

@@ -1,7 +1,6 @@
-use std::iter::{self, FromIterator};
+use std::iter;
 
 use proc_macro2::{self, TokenTree, Delimiter, Spacing, Span};
-use quote::TokenStreamExt;
 
 use crate::error::{Result, Error};
 use crate::buffer::QTokens;
@@ -108,7 +107,7 @@ impl Context {
         let (if_span, condition, then) = branches.pop().expect("guaranteed by put_if");
         let mut mquote_if = MQuoteIf {
             span: if_span,
-            condition: condition.collect(),
+            condition,
             then,
             else_,
         };
@@ -116,7 +115,7 @@ impl Context {
         while let Some((if_span, condition, then)) = branches.pop() {
             let next_if = MQuoteIf {
                 span: if_span,
-                condition: condition.collect(),
+                condition,
                 then,
                 else_: Some(QTokens::from(vec![TokenTreeQ::If(mquote_if)])),
             };
@@ -156,7 +155,7 @@ impl Context {
 
         self.put_qtoken(TokenTreeQ::For(MQuoteFor{
             span,
-            over: over.collect(),
+            over,
             body,
         }))
     }
@@ -201,10 +200,8 @@ impl Context {
 
         self.put_qtoken(TokenTreeQ::Match(MQuoteMatch{
             span,
-            of: of.collect(),
-            patterns: patterns.into_iter()
-                .map(|(of_span, pattern, body)| (of_span, pattern.collect(), body))
-                .collect()
+            of,
+            patterns,
         }))
     }
 
@@ -378,11 +375,11 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                         expect_empty_stream("#{endmatch}", &mut inner_stream)?;
                                     },
                                     _ =>
-                                        context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream()))?,
+                                        context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream().into_iter().peekable()))?,
                                 }
                             }
                             Some(_) =>
-                                context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream()))?,
+                                context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream().into_iter().peekable()))?,
                             None =>
                                 return Err(Error::new(group.span(), "expected tag or expression, got nothing"))
                         }
