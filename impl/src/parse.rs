@@ -58,7 +58,7 @@ impl Context {
     }
 
     pub fn put_if(&mut self, span: Span, mut condition: TokenStream) -> Result<()> {
-        expect_something_in_stream(span, "#{if .. }", "condition", &mut condition);
+        expect_something_in_stream(span, "#{if .. }", "condition", &mut condition)?;
         self.stack.push(ContextItem::If {
             branches: vec![(span, condition, QTokens::new())],
             else_: None,
@@ -66,7 +66,7 @@ impl Context {
         Ok(())
     }
     pub fn put_elif(&mut self, span: Span, mut condition: TokenStream) -> Result<()> {
-        expect_something_in_stream(span, "#{elif .. }", "condition", &mut condition);
+        expect_something_in_stream(span, "#{elif .. }", "condition", &mut condition)?;
         match self.stack.last_mut() {
             Some(ContextItem::If { branches, .. }) => {
                 branches.push((span, condition, QTokens::new()));
@@ -129,7 +129,7 @@ impl Context {
     }
 
     pub fn put_for(&mut self, span: Span, mut over: TokenStream) -> Result<()> {
-        expect_something_in_stream(span, "#{for .. }", "iterator", &mut over);
+        expect_something_in_stream(span, "#{for var in expression}", "var and expression", &mut over)?;
         self.stack.push(ContextItem::For {
             span,
             over,
@@ -162,7 +162,7 @@ impl Context {
     }
 
     pub fn put_match(&mut self, span: Span, mut of: TokenStream) -> Result<()> {
-        expect_something_in_stream(span, "#{match .. }", "matching expression", &mut of);
+        expect_something_in_stream(span, "#{match .. }", "matching expression", &mut of)?;
         self.stack.push(ContextItem::Match {
             span,
             of,
@@ -172,7 +172,7 @@ impl Context {
     }
 
     pub fn put_of(&mut self, span: Span, mut pattern: TokenStream) -> Result <()> {
-        expect_something_in_stream(span, "#{of .. }", "patterns", &mut pattern);
+        expect_something_in_stream(span, "#{of .. }", "pattern", &mut pattern)?;
         match self.stack.last_mut() {
             Some(ContextItem::Match { patterns, .. }) => {
                 patterns.push((span, pattern, QTokens::new()));
@@ -416,8 +416,8 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
 }
 
 fn expect_something_in_stream(span: Span, expectation_place: &str, expected: &str, token_stream: &mut TokenStream) -> Result<()> {
-    if token_stream.peek.is_none() {
-        return Err(Error::new(span, format!("Expected {expected} in {place}, got nothing", tag=tag, place=expectation_place)))
+    if token_stream.peek().is_none() {
+        return Err(Error::new(span, format!("Missing {expected} in {place}", expected=expected, place=expectation_place)))
     }
     Ok(())
 }
@@ -426,6 +426,7 @@ fn expect_empty_stream(expected: &str, token_stream: &mut TokenStream) -> Result
     if let Some(token) = token_stream.peek() {
         return Err(Error::new(token.span(), format!("Expected {} without any additional data", expected)))
     }
+    Ok(())
 }
 
 trait TokenTreeExt {

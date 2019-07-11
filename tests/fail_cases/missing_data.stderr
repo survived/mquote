@@ -1,44 +1,23 @@
-error: missing condition for `if` statemement
- --> $DIR/missing_data.rs:6:25
+error: Missing condition in #{if .. }
+ --> $DIR/missing_data.rs:6:23
   |
 6 |     let _ = mquote!(#{if} 123 #{endif});
-  |                         ^ expected if condition here
+  |                       ^^
 
-error: expected pattern, found `{`
+error: Missing var and expression in #{for var in expression}
  --> $DIR/missing_data.rs:8:23
   |
 8 |     let _ = mquote!(#{for} repeative #{endfor});
-  |                       ^ expected pattern
+  |                       ^^^
 
-error: expected one of `.`, `;`, `?`, `}`, or an operator, found `=>`
- --> $DIR/missing_data.rs:9:31
+error: Missing matching expression in #{match .. }
+ --> $DIR/missing_data.rs:9:23
   |
 9 |     let _ = mquote!(#{match}#{of Some(x)} #{x} #{endmatch});
-  |                               ^^ expected one of `.`, `;`, `?`, `}`, or an operator here
+  |                       ^^^^^
 
-error: expected one of `.`, `?`, `{`, or an operator, found `token_stream`
- --> $DIR/missing_data.rs:9:13
-  |
-9 |     let _ = mquote!(#{match}#{of Some(x)} #{x} #{endmatch});
-  |             ^^^^^^^^^^------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |             |         |    |
-  |             |         |    expected one of `.`, `?`, `{`, or an operator here
-  |             |         while parsing this match expression
-  |             unexpected token
-  |
-  = note: this warning originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
-
-error: expected pattern, found `=>`
+error: Missing pattern in #{of .. }
   --> $DIR/missing_data.rs:10:42
    |
 10 |     let _ = mquote!(#{match Some("1")} #{of} hi #{endmatch});
-   |                                          ^^ expected pattern
-
-warning: unreachable expression
-  --> $DIR/missing_data.rs:10:13
-   |
-10 |     let _ = mquote!(#{match Some("1")} #{of} hi #{endmatch});
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: #[warn(unreachable_code)] on by default
-   = note: this warning originates in a macro outside of the current crate (in Nightly builds, run with -Z external-macro-backtrace for more info)
+   |                                          ^^
