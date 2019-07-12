@@ -23,11 +23,11 @@ Even putting simple expression like `my_struct.field` must be handled in this wa
 
 # Introduce templating `mquote!`
 It supports:
-- [x] [Expression insertion](#expression-insertion)
+- [x] [expression insertion](#expression-insertion)
 - [x] [**if/else**](#if--elif--else) condition
 - [x] [**for**](#for) iteration
 - [x] [**match**](#matching)ing 
-- [x] [**Extend**]ing
+- [x] [**extend**](#extending)ing
 
 So you're able to rewrite above code:
 ```rust
@@ -43,6 +43,10 @@ This crate is not about syntax sugar only! In fact using `mquote!` in complicate
 cases gives a bit of performance increasing since it does not create a several
 `TokenStream`s and join them together, it handles everything within single 
 `TokenStream`.
+
+Crate contains `mquote!` and `mquote_spanned!`. Usage examples of the first one
+are in [following section](#more-examples). The second one allow you to set
+span of producing tokens stream by this syntax: `mquote_spanned!(span => ...)`.
 
 # More examples
 
