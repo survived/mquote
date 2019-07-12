@@ -1,9 +1,3 @@
-# TODO
-* \#{endfor ...}, #{endif ...}
-* different code breaks includeing special case: between #{match .. } ... #{of .. }
-* maybe language optimization?
-* examples
-
 # Motivation
 The only interpolations supported by `quote!` macros are regular insertion `#a` (and
 you are not able to put an expression like `my_struct.field` here) and repeating 
@@ -33,6 +27,7 @@ It supports:
 - [x] [**if/else**](#if--elif--else) condition
 - [x] [**for**](#for) iteration
 - [x] [**match**](#matching)ing 
+- [x] [**Extend**]ing
 
 So you're able to rewrite above code:
 ```rust
@@ -54,7 +49,7 @@ cases gives a bit of performance increasing since it does not create a several
 ## Expression insertion
 
 ```rust
-fn put_filter(enabled: bool) -> TokenStream {
+fn put_filter(enabled: bool) ->  proc_quote2::TokenStream {
     let good_person = Person{ name: "Oleg", age: 20 };
     mquote!{
         assert!(!#{enabled} || person.name == #{good_person.name} 
@@ -65,7 +60,7 @@ fn put_filter(enabled: bool) -> TokenStream {
 
 ## If / elif / else
 ```rust
-fn define_container(amount: usize) -> TokenStream {
+fn define_container(amount: usize) ->  proc_quote2::TokenStream {
     mquote!{
         #{if amount > 1}
             struct People(Vec<Person>);
@@ -80,7 +75,7 @@ fn define_container(amount: usize) -> TokenStream {
 
 ## For
 ```rust
-fn for_usage(fields: Vec<(Ident, Ident)>){
+fn define_person(fields: Vec<(Ident, Ident)>) -> proc_quote2::TokenStream {
     mquote!{
         pub struct Person {
             #{for (name, ty) in fields}
@@ -93,14 +88,40 @@ fn for_usage(fields: Vec<(Ident, Ident)>){
 
 ## Matching
 ```rust
-// TODO
+fn hardcode_it(var: Ident, value: Option<&str>) -> proc_quote2::TokenStream {
+    mquote!{
+        static #var: &str = #{match value}
+            #{of Some(x) if x.len() > 0}
+                #{x};
+            #{of Some(_)}
+                "case for empty strings";
+            #{of None}
+                "default value";
+        #{endmatch}
+    }
+}
 ```
 
-## Escaping `#{}`
-If you want to put `#{abc}` as is, you should double braces:
+## Extending
+Sometimes you want `mquote!` to consume an iterator of `TokenTree`s
+without cloning. It's possible with special syntax `^{iterable}` that accepts
+any `IntoIterator<Item=TokenTree>`.
+
+```rust
+fn assign_by_ref(stream: TokenStream) -> TokenStream {
+    let tail = stream.into_iter().drop(5); // here could be something
+                                           // more reasonable
+    mquote!{
+        let _ = ^{tail}
+    }
+}
+```
+
+## Escaping `#{}` or `^{}`
+If you want to put either `#{abc}` or `^{abc}` as is, you should double braces:
 ```rust
 fn it_works() {
-    let tokens = mquote!(#{{abc}});
-    assert_eq!(tokens.to_string(), "#{abc}")
+    let tokens = mquote!(#{{abc}} ^{{abc}});
+    assert_eq!(tokens.to_string(), "# { abc } ^ { abc }")
 }
 ```

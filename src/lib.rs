@@ -20,6 +20,9 @@ pub mod __rt {
     pub mod proc_macro2 {
         pub use crate::proc_macro2::*;
     }
+    pub mod std {
+        pub use ::std::*;
+    }
 }
 
 #[cfg(mquote_span_testing)]

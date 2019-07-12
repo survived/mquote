@@ -49,6 +49,12 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
                 #runtime::quote::ToTokens::to_tokens(#insertion_var, &mut #token_stream_var);
             }));
         },
+        TokenTreeQ::Extend(span, tokens) => {
+            let tokens = ToTokensHack::from(tokens);
+            stream.append_all(quote_spanned!(span => {
+                #runtime::std::iter::Extend::extend(&mut #token_stream_var, #tokens);
+            }));
+        }
         TokenTreeQ::Group(MQuoteGroup{ delimiter, tokens: group_tokens, span }) => {
             let delimiter = match delimiter {
                 Delimiter::Brace       => Ident::new("Brace"      , span),

@@ -8,7 +8,6 @@ use crate::language::*;
 
 type TokenStream = iter::Peekable<<proc_macro2::TokenStream as IntoIterator>::IntoIter>;
 
-
 enum ContextItem {
     ZeroPoint { tokens: QTokens },
     If { branches: Vec<(Span, TokenStream, QTokens)>, else_: Option<QTokens> },
@@ -382,6 +381,31 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                                 context.put_qtoken(TokenTreeQ::Insertion(group.span(), group.stream().into_iter().peekable()))?,
                             None =>
                                 return Err(Error::new(group.span(), "expected tag or expression, got nothing"))
+                        }
+                    } else if punct.as_char() == '^' && punct.spacing() == Spacing::Alone && next_is_group() {
+                        let group = match token_stream.next() {
+                            Some(TokenTree::Group(group)) => group,
+                            _ => unreachable!("guaranteed by if")
+                        };
+                        let mut inner_stream = group.stream().into_iter().peekable();
+
+                        match inner_stream.next() {
+                            Some(TokenTree::Group(escaping)) => {
+                                if let Some(token) = inner_stream.next() {
+                                    let err = Error::new(token.span(), "invalid escaping");
+                                    let last_span = inner_stream
+                                        .map(|token| token.span())
+                                        .last();
+                                    return Err(if let Some(span) = last_span {
+                                        err.end_span(span)
+                                    } else {
+                                        err
+                                    })
+                                }
+                                context.put_qtoken(TokenTreeQ::Plain(punct.into()))?;
+                                context.put_qtoken(TokenTreeQ::Plain(escaping.into()))?;
+                            }
+                            _ => context.put_qtoken(TokenTreeQ::Extend(group.span(), group.stream().into_iter().peekable()))?,
                         }
                     } else {
                         context.put_qtoken(TokenTreeQ::Plain(punct.into()))?

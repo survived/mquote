@@ -1,0 +1,11 @@
+error[E0382]: use of moved value: `insertion`
+ --> $DIR/cannot_use_same_variable_twice_in_extend_insertion.rs:7:46
+  |
+6 |     let insertion = mquote!(h e l l o);
+  |         --------- move occurs because `insertion` has type `mquote::__rt::proc_macro2::TokenStream`, which does not implement the `Copy` trait
+7 |     let q = mquote!(let _ = [ ^{insertion} ^{insertion} ]);
+  |                                 ---------    ^^^^^^^^^ value used here after move
+  |                                 |
+  |                                 value moved here
+
+For more information about this error, try `rustc --explain E0382`.

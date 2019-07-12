@@ -10,6 +10,7 @@ pub type TokenIterator = iter::Peekable<<proc_macro2::TokenStream as IntoIterato
 
 pub enum TokenTreeQ {
     Insertion(Span, TokenIterator),
+    Extend(Span, TokenIterator),
     If(MQuoteIf),
     For(MQuoteFor),
     Match(MQuoteMatch),
@@ -21,6 +22,7 @@ impl TokenTreeQ {
     pub fn span(&self) -> Span {
         match self {
             TokenTreeQ::Insertion(span, _) => *span,
+            TokenTreeQ::Extend(span, _) => *span,
             TokenTreeQ::If(MQuoteIf{ span, .. }) => *span,
             TokenTreeQ::For(MQuoteFor{ span, .. }) => *span,
             TokenTreeQ::Match(MQuoteMatch{ span, .. }) => *span,

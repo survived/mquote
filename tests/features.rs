@@ -101,3 +101,10 @@ fn nesting_if() {
     }};
     assert_eq!(q.to_string(), "{ { 123 } }");
 }
+
+#[test]
+fn extending_insertion() {
+    let insertion = mquote!(h e l l o);
+    let q = mquote!(let _ = [ ^{insertion} ]);
+    assert_eq!(q.to_string(), "let _ = [ h e l l o ]");
+}
