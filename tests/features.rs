@@ -108,3 +108,79 @@ fn extending_insertion() {
     let q = mquote!(let _ = [ ^{insertion} ]);
     assert_eq!(q.to_string(), "let _ = [ h e l l o ]");
 }
+
+#[test]
+fn complex_case() {
+    let enum_name = Ident::new("MyEnum", Span::call_site());
+    let variants_str = vec![
+        "Insertion",
+        "Extend",
+        "If",
+        "For",
+        "Match",
+        "Group",
+        "Plain",
+    ];
+    let variants = variants_str.iter()
+        .map(|v| Ident::new(v, Span::call_site()))
+        .collect::<Vec<_>>();
+    let impl_default = Some(2);
+    let q = mquote!{
+        pub enum #{enum_name} {
+            #{for variant in &variants}
+                #{variant},
+            #{endfor}
+        }
+
+        impl #{enum_name} {
+            fn as_str(&self) -> &'static str {
+                match self {
+                    #{for (variant, variant_str) in variants.iter().zip(variants_str.iter())}
+                        #{enum_name}::#{variant} => #{variant_str},
+                    #{endfor}
+                }
+            }
+        }
+
+        #{match impl_default}
+        #{of None}
+        #{of Some(n)}
+            impl Default for #{enum_name} {
+                fn default() -> Self {
+                    #{enum_name}::#{variants[n]}
+                }
+            }
+        #{endmatch}
+    };
+    let expected =
+        "pub enum MyEnum { \
+            Insertion , \
+            Extend , \
+            If , \
+            For , \
+            Match , \
+            Group , \
+            Plain , \
+        } \
+        \
+        impl MyEnum { \
+            fn as_str ( & self ) -> & 'static str { \
+                match self { \
+                    MyEnum ::Insertion => \"Insertion\" , \
+                    MyEnum ::Extend => \"Extend\" , \
+                    MyEnum ::If => \"If\" , \
+                    MyEnum ::For => \"For\" , \
+                    MyEnum ::Match => \"Match\" , \
+                    MyEnum ::Group => \"Group\" , \
+                    MyEnum ::Plain => \"Plain\" , \
+                } \
+            } \
+        } \
+        \
+        impl Default for MyEnum { \
+            fn default ( ) -> Self { \
+                MyEnum ::If \
+            } \
+        }";
+    assert_eq!(q.to_string(), expected);
+}

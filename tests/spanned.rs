@@ -70,6 +70,33 @@ fn spanned_if() {
 
 #[cfg(mquote_span_testing)]
 #[test]
+fn spanned_for() {
+    use std::iter;
+    let span = Span::different();
+    let iterable = iter::repeat(Ident::new("test", span)).take(10);
+    let q = mquote_spanned!(span => #{for i in iterable} #{i} #{endfor});
+    assert_span_of_tokens(q, span);
+}
+
+#[cfg(mquote_span_testing)]
+#[test]
+fn spanned_match() {
+    let span = Span::different();
+    let e = Some(12);
+    let ident = Ident::new("abc", span);
+    let q = mquote_spanned!(span =>
+        #{match e}
+            #{of Some(_)}
+                #{ident}
+            #{of None}
+                ident2
+        #{endmatch}
+    );
+    assert_span_of_tokens(q, span);
+}
+
+#[cfg(mquote_span_testing)]
+#[test]
 fn spanned_escaping() {
     let span = Span::different();
     let q = mquote_spanned!(span => #{{ident}});
@@ -88,5 +115,54 @@ fn spanned_nested() {
             { let b = #{ident}; b * 2 }
         #{endif}
     });
+    assert_span_of_tokens(q, span);
+}
+
+#[cfg(mquote_span_testing)]
+#[test]
+fn complex_case() {
+    let span = Span::different();
+    let enum_name = Ident::new("MyEnum", span);
+    let variants_str = vec![
+        "Insertion",
+        "Extend",
+        "If",
+        "For",
+        "Match",
+        "Group",
+        "Plain",
+    ];
+    let variants = variants_str.iter()
+        .map(|v| Ident::new(v, span))
+        .collect::<Vec<_>>();
+    let impl_default = Some(2);
+    let q = mquote_spanned!{span =>
+        pub enum #{enum_name} {
+            #{for variant in &variants}
+                #{variant},
+            #{endfor}
+        }
+
+        impl #{enum_name} {
+            fn as_str(&self) -> &'static str {
+                match self {
+                    #{for (variant, variant_str) in variants.iter().zip(variants_str.iter())}
+                        #{enum_name}::#{variant} => unimplemented!(),
+                    #{endfor}
+                }
+            }
+        }
+
+        #{match impl_default}
+        #{of None}
+        #{of Some(n)}
+            impl Default for #{enum_name} {
+                fn default() -> Self {
+                    #{enum_name}::#{variants[n]}
+                }
+            }
+        #{endmatch}
+    };
+
     assert_span_of_tokens(q, span);
 }

@@ -11,3 +11,9 @@ impl ToTokens for Ident {
         token_stream.extend(iter::once(TokenTree::Ident(self.clone())))
     }
 }
+
+impl<T: ToTokens+?Sized> ToTokens for &T {
+    fn to_tokens(&self, token_stream: &mut TokenStream) {
+        <T as ToTokens>::to_tokens(self, token_stream)
+    }
+}

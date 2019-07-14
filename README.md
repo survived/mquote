@@ -1,3 +1,9 @@
+This is another one Rust quasi-quoting library like 
+[quote][quote-lib] that gives you `mquote!` macro providing
+several features aimed on better readability and usability.
+
+[quote-lib]: https://crates.io/crates/quote
+
 # Motivation
 The only interpolations supported by `quote!` macros are regular insertion `#a` (and
 you are not able to put an expression like `my_struct.field` here) and repeating 
@@ -51,9 +57,10 @@ span of producing tokens stream by this syntax: `mquote_spanned!(span => ...)`.
 # More examples
 
 ## Expression insertion
-
+Turns given expression into tokens by using 
+[`ToTokens`](https://docs.rs/quote/0.6.13/quote/trait.ToTokens.html).
 ```rust
-fn put_filter(enabled: bool) ->  proc_quote2::TokenStream {
+fn put_filter(enabled: bool) ->  proc_macro2::TokenStream {
     let good_person = Person{ name: "Oleg", age: 20 };
     mquote!{
         assert!(!#{enabled} || person.name == #{good_person.name} 
@@ -64,7 +71,7 @@ fn put_filter(enabled: bool) ->  proc_quote2::TokenStream {
 
 ## If / elif / else
 ```rust
-fn define_container(amount: usize) ->  proc_quote2::TokenStream {
+fn define_container(amount: usize) ->  proc_macro2::TokenStream {
     mquote!{
         #{if amount > 1}
             struct People(Vec<Person>);
@@ -79,7 +86,7 @@ fn define_container(amount: usize) ->  proc_quote2::TokenStream {
 
 ## For
 ```rust
-fn define_person(fields: Vec<(Ident, Ident)>) -> proc_quote2::TokenStream {
+fn define_person(fields: Vec<(Ident, Ident)>) -> proc_macro2::TokenStream {
     mquote!{
         pub struct Person {
             #{for (name, ty) in fields}
@@ -92,7 +99,7 @@ fn define_person(fields: Vec<(Ident, Ident)>) -> proc_quote2::TokenStream {
 
 ## Matching
 ```rust
-fn hardcode_it(var: Ident, value: Option<&str>) -> proc_quote2::TokenStream {
+fn hardcode_it(var: Ident, value: Option<&str>) -> proc_macro2::TokenStream {
     mquote!{
         static #var: &str = #{match value}
             #{of Some(x) if x.len() > 0}
