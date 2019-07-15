@@ -3,6 +3,12 @@ name = "mquote"
 version = "0.1.0"
 authors = ["Denis <denis.varlakov@vdomresearch.com>"]
 edition = "2018"
+description = "Quasi-quoting library aimed on better readability and usability"
+readme = "README.md"
+keywords = ["quote", "proc-macro", "syn"]
+categories = ["development-tools::procedural-macro-helpers"]
+repository = "https://github.com/survived/mquote"
+license = "MIT/Apache-2.0"
 
 [dependencies]
 proc-macro-hack = "0.5"
