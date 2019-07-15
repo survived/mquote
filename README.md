@@ -1,3 +1,8 @@
+Mquote
+======
+[![Latest Version](https://img.shields.io/crates/v/mquote.svg)](https://crates.io/crates/mquote)
+[![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/mquote/)
+
 This is another one Rust quasi-quoting library like 
 [quote][quote-lib] that gives you `mquote!` macro providing
 several features aimed on better readability and usability.
