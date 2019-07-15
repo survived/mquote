@@ -22,7 +22,7 @@ pub fn compile(mquote: QTokens, requested_span: Option<TokenStream>) -> TokenStr
     let mut stream = TokenStream::new();
     compile_with(mquote, &mut stream, &scope);
 
-    let ref token_stream_var = scope.token_stream_var;
+    let token_stream_var = &scope.token_stream_var;
     quote_spanned!{Span::call_site() => {
         let mut #token_stream_var = #runtime::proc_macro2::TokenStream::new();
         #stream
@@ -68,7 +68,7 @@ fn put_qtoken(token: TokenTreeQ, stream: &mut TokenStream, scope: &Scope) {
                 requested_span: requested_span.clone(),
                 runtime: runtime.clone(),
             };
-            let ref inner_stream_var = inner_scope.token_stream_var;
+            let inner_stream_var = &inner_scope.token_stream_var;
             let constructing_group_var = Ident::new("constructing_group", Span::call_site());
 
             let mut inner_stream = TokenStream::new();

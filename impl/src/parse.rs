@@ -235,11 +235,10 @@ impl Context {
     pub fn lookup_end_tag(&self) -> Option<(usize, &'static str)> {
         let tag = self.stack.iter().rev()
             .enumerate()
-            .filter(|(_, tag)| match tag {
+            .find(|(_, tag)| match tag {
                 ContextItem::ZeroPoint { .. } => false,
                 ContextItem::LevelHolder { .. } => false,
-                _ => true })
-            .next();
+                _ => true });
         match tag {
             Some((i, ContextItem::If { .. })) => Some((i, "endif")),
             Some((i, ContextItem::For { .. })) => Some((i, "endfor")),
@@ -275,7 +274,7 @@ impl Context {
         }
 
         let msg = unclosed_tags.join("}, #{");
-        return Err(Error::new(eof.unwrap_or(Span::call_site()), format!("expected: #{{{}}}", msg)))
+        Err(Error::new(eof.unwrap_or_else(Span::call_site), format!("expected: #{{{}}}", msg)))
     }
 }
 
@@ -294,7 +293,7 @@ pub fn parse_spanned(token_stream: proc_macro2::TokenStream) -> Result<(proc_mac
         requested_span.push(token)
     }
 
-    return Err(Error::new(Span::call_site(), "expected span separated by '=>' from tokens"))
+    Err(Error::new(Span::call_site(), "expected span separated by '=>' from tokens"))
 }
 
 fn detect_end_of_span(current_token: &TokenTree, rest_stream: &mut TokenStream) -> bool {
@@ -323,8 +322,7 @@ fn parse(mut token_stream: TokenStream) -> Result<QTokens> {
                     let mut next_is_group = || token_stream.peek()
                         .into_iter()
                         .flat_map(TokenTreeExt::as_group)
-                        .filter(|group| group.delimiter() == Delimiter::Brace)
-                        .next().is_some();
+                        .any(|group| group.delimiter() == Delimiter::Brace);
 
                     if punct.as_char() == '#' && punct.spacing() == Spacing::Alone && next_is_group() {
                         let group = match token_stream.next() {
@@ -456,8 +454,8 @@ trait TokenTreeExt {
 
 impl TokenTreeExt for TokenTree {
     fn as_group(&self) -> Option<&proc_macro2::Group> {
-        match self {
-            &TokenTree::Group(ref group) => Some(group),
+        match *self {
+            TokenTree::Group(ref group) => Some(group),
             _ => None,
         }
     }
